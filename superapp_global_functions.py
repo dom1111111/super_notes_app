@@ -11,32 +11,31 @@ import superapp_IO as io
 def get_input():
     return io.input_q.get()
 
-def check_input():
-    input = get_input()
-    if input == 'b1' or 'b2':
-        return input
-    elif input == 'reset':
-        # call output to say "cancelled"
-        return input
-    elif input == 'help':
-        pass
-
-def tts(message):
-    io.audio.tts_speak(message)
+def command_input():
+    while True:
+        b_input = get_input()
+        if b_input == 'btnA*1':
+            return 'A1'
+        elif b_input == 'btnA*2':
+            return 'A2'
+        elif b_input == 'btnA*3':
+            output_play_tone(2)
+            print('command cancelled')
+            return 'reset'
+        """
+        elif b_input == 'btnA*4':
+            # help
+            return
+        """
 
 #--------------------#
 
 def get_current_datetime_string():
     now = datetime.now()
-    datetime_string = now.strftime('%Y-%m-%d_%H:%M:%S')
+    datetime_string = now.strftime('%Y-%m-%d_%H%M%S%f')[:-3]
     return datetime_string
 
-def get_current_datetime_string_filename_safe():
-    now = datetime.now()
-    datetime_string = now.strftime('%Y-%m-%d_%H-%M-%S')
-    return datetime_string
-
-def generate_file_path(filename:str, folder=''):
+def generate_file_path(filename:str, folder:str=''):
     script_path = os.path.realpath(__file__)        # gets the full file path of this script, including file name
     script_dir = os.path.dirname(script_path)       # gets the file path of this script, NOT including file name
     if folder:
@@ -48,18 +47,25 @@ def generate_file_path(filename:str, folder=''):
 
 #--------------------#
 
-def record_start():
+def output_play_tone(tone_type):
+    io.audio.play_tone(tone_type)
+
+def output_tts(message):
+    io.audio.tts_speak(message)
+
+def input_record_start():
     io.rec.record()
 
-def record_stop_and_write(path):
+def input_record_stop_and_write(path):
     sleep(0.1)
     audio = io.rec.stop_and_return()
     io.rec.write_to_file(audio, path)
 
+
 def full_record(path):
     io.rec.record()
     input = check_input()
-    if input == 'bA_1' or input == 'bA_2':
+    if input == 'btnA*1' or input == 'btnA*2':
         sleep(0.1)
         audio = io.rec.stop_and_return()
         io.rec.write_to_file(audio, path)
@@ -85,4 +91,3 @@ def transcribe_audio_file(file_path):
     except:
         pass
         # return ("ERROR", "something went wrong")
-

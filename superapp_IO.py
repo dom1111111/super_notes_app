@@ -4,12 +4,12 @@ from time import sleep
 from threading import Thread
 from queue import SimpleQueue
 import keyboard
-
+import os
 
 #--------------------#
 #--------Input-------#
 
-input_q = SimpleQueue()         # stores input events ro be used by the other
+input_q = SimpleQueue()         # stores input events
 
 
 # Button Input - can detect multi-presses from buttons
@@ -52,11 +52,11 @@ def text_input():
 def button_action(press_num):
     assert isinstance(press_num, int)
     map = {
-        1:'bA_1',
-        2:'bA_2',
-        3:'bA_3',
-        4:'bA_4',
-        10:'bA_10'
+        1:'btnA*1',
+        2:'btnA*2',
+        3:'btnA*3',
+        4:'btnA*4',
+        10:'btnA*10'
     }
     action = map.get(press_num)
     if action:
@@ -100,49 +100,70 @@ rec = play_rec_audio.RecAudio()         # other processes can call function of t
 visual_mode = False
 
 
-# NOTE: consider seperating the functions for tts and play recordings into their own
-# - each has their own instances of PlayAudio, so that one can be paused and resumed with another inbetwen!
 # class for any audio output - has functions for tts and playing recordings
 class AudioOutput:
     def __init__(self):
-        self.play_sound = play_rec_audio.PlayAudio()    # instantiate class for playing audio from the play_rec_audio module
+        # instantiate class for playing audio from the play_rec_audio module
+        self.program_sounds = play_rec_audio.PlayAudio()    # one instance for playing tts and program notifcation sounds
+        self.general_sounds = play_rec_audio.PlayAudio()    # one instance for playing general audio
 
         self.tts_current_message = ''
-        self.tts_audio_path = './temp_audio/current_tts.wav'
+        self.tts_audio_path = './program_files/current_tts.wav'
         self.tts = pyttsx3.init()                       # initialize the tts engine from the pyttsx3 module
 
-    def play_chime(self, chime_type):
-        # so here is where you want to have a map to compare chime_type
-        # against a filepath for various global program notification sounds
-        # code should check if playsound is playing:
-        if self.play_sound.state == "playing":
-            self.pause_resume()
-        # then here, it should play the sound
-        # ...
-        # if there's ever a situation where these sounds should play ONTOP of the other sounds,
-        # then this should be in its own function/class
+        self.tones_path = './program_files'
 
-    def play_soundfile(self, filepath):
-        self.stop()                                 # first stops audio if it's playing
-        self.play_sound.play(filepath)
+
+    # all program_sounds functions:
+
+    def play_tone(self, tone_type):
+        # check if general_sounds is playing
+        if self.general_sounds.state == "playing":
+            self.pause_soundfile()
+        # map of tone_type's file name
+        map = {
+            1:'tone_1_5.wav',
+            2:'tone_5_1.wav'
+        }
+        path = os.path.join(self.tones_path, map.get(tone_type))
+        try:
+            self.program_sounds.play(path)
+        except:
+            # ERROR
+            pass 
 
     def set_tts_speed(self, rate):
         self.tts.setProperty('rate', rate)          # defualt speaking rate is 200
 
     def tts_speak(self, message):
-        self.stop()                                 # first stops audio if it's playing
+        # check if general_sounds is playing
+        if self.general_sounds.state == "playing":
+            self.pause_soundfile()
         path = self.tts_audio_path
         if message != self.tts_current_message:     # if the message is the same, skip this step
             self.tts.save_to_file(message, path)
             self.tts.runAndWait()
         self.tts_current_message = message
-        self.play_sound.play(path)
+        self.program_sounds.play(path)
+    
+    def pause_program_sounds(self):
+        self.program_sounds.pause_toggle()
 
-    def pause_resume(self):
-        self.play_sound.pause_toggle()
+    def stop_program_sounds(self):
+        self.program_sounds.stop()
 
-    def stop(self):
-        self.play_sound.stop()
+
+    # all general_sounds functions:
+
+    def play_soundfile(self, filepath):
+        self.stop_soundfile()               # first stops audio if it's playing
+        self.general_sounds.play(filepath)
+
+    def pause_soundfile(self):
+        self.general_sounds.pause_toggle()
+
+    def stop_soundfile(self):
+        self.general_sounds.stop()
 
 
 #--------------------#
@@ -153,4 +174,4 @@ if __name__ == "__main__":
     pass
 else:
     pc = PressCounter()         # detects button presses
-    audio = AudioOutput()    # instatiate the AudioOutput class 
+    audio = AudioOutput()       # instatiate the AudioOutput class 

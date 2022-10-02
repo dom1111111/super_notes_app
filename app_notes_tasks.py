@@ -2,70 +2,36 @@
 description incomplete
 """
 import sqlite3
-import os
-from datetime import datetime
+import superapp_global_functions as funcs
 
 #--------------------------------#
 # SQLite Database Setup
 
-database_filename = 'main.db'  # pages.db
+database_folder_path = 'storage'
+database_filename = 'main.db'
 
-script_path = os.path.realpath(__file__)        # gets the full file path of this script, including file name
-script_dir = os.path.dirname(script_path)       # gets the file path of this script, NOT including file name
-database_path = os.path.join(script_dir, database_filename) # join the script file path with directory name
-# os.chdir(script_dir)                          # change current directory to the scripts directory
+database_path = funcs.generate_file_path(database_filename, database_folder_path)
 
 # connect to the databse (if it does not exist, it will create it)
 sqlite_connection = sqlite3.connect(database_path)
 con = sqlite_connection             # shortform
 # create a cursor object once the connection has been established
-cursor = sqlite_connection.cursor() # shortform
-cur = cursor   
+cursor = sqlite_connection.cursor()
+cur = cursor                        # shortform
 
 #---
 
-# Tasks table setup
-create_tasks_table_q = """
-CREATE TABLE IF NOT EXISTS Tasks (
-    time TEXT PRIMARY KEY,  -- created time. this is the main id
-    name TEXT,
-    audio TEXT,             -- a string of a file path refferencing the audio file
-    parent_tasks,
-    child_tasks,
-    do_date TEXT,           
-    importance INTEGER,     -- should only be 1, 2, 3, or 4
-    recurrence TEXT,
-    status TEXT,
-    finished_time TEXT      -- to store when the tasks was marked as finished
-);
-"""
-
 # Notes table setup
-create_notes_table_q = """
+create_notes_table = """
 CREATE TABLE IF NOT EXISTS Notes (
     time TEXT PRIMARY KEY,  -- created time. this is the main id
-    name TEXT,
-    audio TEXT,             -- a string of a file path refferencing the audio file
-    sub_content TEXT,       -- to store serialized text documents
-    parent_notes,
-    child_notes,
+    title TEXT,             -- the title / main text content
+    path TEXT,              -- related file/URL path
+    descriptor TEXT         -- kewords to link this note to other notes
 );
 """
 
-# Projects table setup
-create_projects_table_q = """
-CREATE TABLE IF NOT EXISTS Projects (
-    name TEXT PRIMARY KEY,
-    parent_projects TEXT,
-    child_projects TEXT,
-    task_links TEXT,
-    note_links TEXT
-);
-"""
-
-cur.execute(create_tasks_table_q)
-cur.execute(create_notes_table_q)
-cur.execute(create_projects_table_q)
+cur.execute(create_notes_table)
 con.commit()
 
 #--------------------------------#
@@ -73,14 +39,14 @@ con.commit()
 
 class CurrentSession:
     def __init__(self):
-        self.current_page = ''      # stores the id of the current page
+        self.current_note = ''      # stores the id of the current page
         self.session_history = []   # stores the session's history of current pages
-    def update_current_page(self, id):
-        self.current_page = id
+    def update_current_note(self, id):
+        self.current_note = id
     def update_session_history(self, id):
         self.session_history.append(id)
     def reset_session(self):
-        self.current_page = ''
+        self.current_note = ''
         self.session_history.clear()
 
 # main function for querying the databse
@@ -99,30 +65,109 @@ def database_query(query, values=None):
 
     # also need code for error prevention
 
-def get_current_datetime_string():
-    now = datetime.now()
-    datetime_string = now.strftime('%Y-%m-%d_%H:%M:%S')
-    return datetime_string
-
 #--------------------------------#
 
-# instantiate the crrent session
+# instantiate the current session
 this_session = CurrentSession()
 
 #--------------------------------#
-# Main Functions
+# Core Basic Functions
 
-def create_task(name, recording_filepath=None):
-    time = get_current_datetime_string()
+def create_note(name):
+    time = funcs.get_current_datetime_string()
     q = """
-    INSERT INTO Tasks (time, name, audio)
-    VALUES(?, ?, ?);
+    INSERT INTO Notes (time, title)
+    VALUES(?, ?);
     """
-    q_values = (time, name, recording_filepath)
+    q_values = (time, name)
     database_query(q, q_values)
-    task_id = time
-    this_session.update_current_page(task_id)
+    id = time
+    this_session.update_current_note(id)
 
+def edit_current_note_descriptor(descriptor):
+    note = this_session.current_note
+    q = """
+    INSERT INTO Notes (descriptor)
+    VALUES(?)
+    WHERE WHERE time = ?;
+    """
+    q_values = (descriptor, note)
+    database_query(q, q_values)
+
+def get_specific_note(id):
+    q = """
+    SELECT time, title, path, descriptor FROM Notes
+    WHERE time = ?;
+    """
+    q_values = (id,)
+    result = database_query(q, q_values)
+    this_session.update_current_note(id)
+    return result
+
+# return notes whose titles contain the value
+def get_notes_with_title_value(value):
+    value_words = value.lower().split()
+    # create the sqlite query with a WHERE / OR statement for each word in the value:
+    q = """
+    SELECT time, title, path, descriptor FROM Notes
+    """
+    for i, word in enumerate(value_words):  # allows to keep track of the current iteration of the for loop
+        if i == 0:                          # only run this code if it's the fist item in the list
+            q += """WHERE title LIKE ?"""
+        else:
+            q += """ OR title LIKE ?"""
+    q += ";"
+    # set up the query placeholder values to be each word in the value:
+    q_values = []
+    for word in value_words:
+        q_values.append(f"%{word}%")
+    q_values = tuple(q_values)
+    # execute query:
+    q_result = database_query(q, q_values)
+
+    # now check to see which results match the search value best
+    result_notes = []
+    for note in q_result:                   # main cycle for each note from the query result
+        word_match_count = 0
+        note_title = note[1].lower().split()
+        for note_word in note_title:  # cycle for each word in the title of each note
+            for word in value_words:        # cycle for each word in the search value words
+                if note_word == word:
+                    word_match_count += 1   # if the note_word matches the value_word, increase the match count
+        # now calculate the percentage of matched words in each note of the rersults
+        match_percentage = (word_match_count / len(note_title)) * 100
+        note_match = (match_percentage, note)
+        result_notes.append(note_match)
+    # finally, sort the results from highest match percentage to lowest and return
+    sorted_result_notes = sorted(result_notes, reverse=True)
+    return sorted_result_notes
+
+
+
+
+
+
+# TODO:
+    # the desciptor can be the same as above but reversed
+        # matches the percentage for the result descriptor matching the search value (do the vice versa of above)
+
+
+# return notes whose descriptors contain the value
+def get_notes_with_descriptor_value(value):
+    q = """
+    SELECT time, title, path, descriptor FROM Notes
+    WHERE descriptor LIKE ?;
+    """
+    q_values = (f'%{value}%',)
+    result = database_query(q, q_values)
+    return result
+
+
+#--------------------------------#
+
+# these next functions are not core, but specific to viewing notes/generating views
+
+# NOTES:
 """
 create task (by name)
 
@@ -156,10 +201,21 @@ undo last command
 
 print('hi!')
 
-create_task("get up and dance!")
+# create_note("four men go to the bank bitch!")
 
-table = database_query("SELECT * FROM Tasks")
+"""
+val = ("%four%",)
+
+table = database_query("SELECT * FROM Notes WHERE title LIKE ?;", val)
 
 for row in table:
     print(row)
+"""
+
+
+while True:
+    i = input("search in notes: ")
+    table = get_notes_with_title_value(i)
+    for row in table:
+        print(row)
 

@@ -1,9 +1,9 @@
 import os
 from time import sleep
-import superapp_global_functions as funcs
 from threading import Thread
 from statistics import mode
-
+from queue import SimpleQueue
+import superapp_global_functions as funcs
 # apps
 import app_voice_memo
 
@@ -12,61 +12,72 @@ import app_voice_memo
 # Voice commands
 
 voice_command_map = {
-    ('voice', 'memo',):app_voice_memo.create_memo,
+    ('voice','memo'):app_voice_memo.create_memo,
+    ('make','create','new','note','page'):lambda a : print('dummy command! +', a),
+    ('make','create','new','task'):lambda a : print('dummy command! +', a)
     }
 
 def voice_command():
-    loop = True
-    while loop:
-        # start recording command audio
-        funcs.record_start()
-        # generate neccessary paths for the audio files
-        folder = 'temp_audio'
-        command_path = funcs.generate_file_path('command.wav', folder)
-        content_path = funcs.generate_file_path('content.wav', folder)
-        # collect command audio
-        input = funcs.check_input()
-        if input == 'bA_1' or input == 'bA_2':
-            funcs.record_stop_and_write(command_path)
-        elif input == 'reset':
-            return  # cancel function 
-        # start recording content audio
-        funcs.record_start()
-        # create thread to transcribe command audio in the mean time
-        command_words_container = []
-        def command_transcribe():
-            command_words = funcs.transcribe_audio_file(command_path)
-            command_words_container.append(command_words)
-        command_transcribe_thread = Thread(target=command_transcribe)
-        command_transcribe_thread.daemon = True
-        command_transcribe_thread.start()
-        # collect content audio
-        input = funcs.check_input()
-        if input == 'bA_1' or input == 'bA_2':
-            funcs.record_stop_and_write(content_path)
-        elif input == 'reset':
-            return  # cancel function     
-        # transcribe audio and do a command
-        command = command_words_container[0]
-        content = funcs.transcribe_audio_file(content_path)
-        # now compare the command words against the map to see which command is the best match
-        command_likelyness = []
-        for keywords_tuple in voice_command_map.keys():
-            for word in command.split():
-                if word in keywords_tuple:
-                    command = voice_command_map.get(keywords_tuple)
-                    command_likelyness.append(command)
-        if command_likelyness:              # only do this is list is not empty
-            command = mode(command_likelyness)  # get the command which shows up most often in the list (best match)
-        else:
-            funcs.tts('ERROR! command not found')
+    while True:
+        while True:
+            funcs.output_play_tone(1)   # play tone 1 to let user know that the voice command recording is starting
+            funcs.input_record_start()  # start recording command audio
+            # generate neccessary paths for the audio files
+            folder = 'program_files'
+            command_path = funcs.generate_file_path('command.wav', folder)
+            content_path = funcs.generate_file_path('content.wav', folder)
+            # collect command audio
+            u_input = funcs.command_input()
+            if u_input == 'A1' or u_input == 'A2':
+                funcs.input_record_stop_and_write(command_path)
+            elif u_input == 'reset':
+                return  # cancel function 
+            # start recording content audio
+            funcs.input_record_start()
+            # create thread to transcribe command audio in the mean time
+            command_q = SimpleQueue()
+            def command_transcribe():
+                command_words = funcs.transcribe_audio_file(command_path)
+                command_q.put(command_words)
+            command_transcribe_thread = Thread(target=command_transcribe)
+            command_transcribe_thread.daemon = True
+            command_transcribe_thread.start()
+            # collect content audio
+            u_input = funcs.command_input()
+            if u_input == 'A1' or u_input == 'A2':
+                funcs.input_record_stop_and_write(content_path)
+            elif u_input == 'reset':
+                return  # cancel function     
+            # transcribe content audio
+            content = funcs.transcribe_audio_file(content_path)
+            # now compare the command words against the map to see which command is the best match
+            command = command_q.get()       # waits for the command transcription thread to do its thing (if needed)
+            command_likelyness = []
+            command_words = command.split()
+            for keywords_tuple in voice_command_map.keys():
+                for word in command_words:
+                    if word in keywords_tuple:
+                        command = voice_command_map.get(keywords_tuple)
+                        command_likelyness.append(command)
+            if command_likelyness:              # only do this if list is not empty
+                command = mode(command_likelyness)  # get the command which shows up most often in the list (best match)
+            else:
+                funcs.output_tts('ERROR! Command not found, function cancelled')
+                return
+            # confirm with the user that the command is correct
+            confirmation_message = f"executing {command.__name__} with the argument, {content}. Press once to confirm, and twice to start over"
+            print(confirmation_message)
+            funcs.output_tts(confirmation_message)
+            u_input = funcs.command_input()
+            if u_input == 'A1': 
+                pass    # go on to the next step
+            elif u_input == 'A2':
+                break   # break the loop and start over
+            elif u_input == 'reset':
+                return  # cancel function 
+            # finally, execute the command and exit out of the function
+            command(content)
             return
-        # confirm with the user that the command is correct
-        funcs.tts(f"executing {command.__name__} with ")
-        # single press is yes, double is no
-    # finally, execute the command
-    command(content)
-
 
 #--------------------#
 # Main
@@ -81,43 +92,36 @@ def startup():
     
     # send startup / welcome message to outcome
 
+
+initial_commands_map = {
+    'btnA*1':voice_command,               # start voice input
+    'btnA*2':app_voice_memo.create_memo,  # default command
+    'btnA*3':'',                          # reset / undo
+    'btnA*4':'help',                      # help
+    'btnA*10':exit                        # exit program
+}
+
 def main_loop():
-    map = {
-        'bA_1':voice_command,               # start voice input
-        'bA_2':app_voice_memo.create_memo,  # default command
-        'bA_3':'',                          # reset / undo
-        'bA_4':'help',                      # help
-        'bA_10':exit                        # exit program
-    }
     while True:
-        input = funcs.get_input()           # get input events
-        command = map.get(input)            # compare them against the map of initial commands
+        print('accepting input...')
+        input = funcs.get_input()                   # get input events
+        command = initial_commands_map.get(input)   # compare them against the map of initial commands
         command()
 
+#--------------------#
 
 if __name__ == "__main__":
     startup()
     main_loop()
 
 
-"""
-so here's the loop
-
-main_primary_thread     wait for input
-IO                      input event happens and is sent to input queue
-main_primary_thread     get input from input queue and do something with it
-main_primary_thread     call function in apps
-app                     process stuff, send command requests to main
-main_secondary_thread   get command request (each with proper dictionary format)
-main_secondary_thread   call main functions to process command
-main_secondary_thread   return result to app queue
-app                     either repeat the above, or finish stuff and return to main
-main                    the full cycle has completed, go back to beginning
-
-"""
 
 
-#--------------------#
+
+
+
+
+
 
 """
 TODO:
