@@ -24,6 +24,7 @@ def shutdown():
     message = "goodbye!"
     funcs.output_do_visual_function('print_user_message', message)
     funcs.output_tts(message)
+    sleep(2)
     exit()
 
 #--------------------#
@@ -38,72 +39,73 @@ voice_command_map = {
     }
 
 def voice_command():
-    while True:
-        while True:
-            funcs.output_play_tone(1)               # play tone 1 to let user know that the voice command recording is starting
-            funcs.input_record_start()              # start recording command audio
-            # generate neccessary paths for the audio files
-            folder = 'program_files'
-            command_path = funcs.generate_file_path('command.wav', folder)
-            content_path = funcs.generate_file_path('content.wav', folder)
-            # collect command audio
-            u_input = funcs.command_input()
-            if u_input == 'A1' or u_input == 'A2':
-                funcs.input_record_stop_and_write(command_path)
-            elif u_input == 'reset':
-                funcs.input_record_stop()
-                return                              # exit function 
-            # start recording content audio
-            funcs.input_record_start()
-            # create thread to transcribe command audio in the mean time
-            command_q = SimpleQueue()
-            def command_transcribe():
-                command_words = funcs.transcribe_audio_file(command_path)
-                command_q.put(command_words)
-            command_transcribe_thread = Thread(target=command_transcribe)
-            command_transcribe_thread.daemon = True
-            command_transcribe_thread.start()
-            # collect content audio
-            u_input = funcs.command_input()
-            if u_input == 'A1' or u_input == 'A2':
-                funcs.input_record_stop_and_write(content_path)
-            elif u_input == 'reset':
-                funcs.input_record_stop()
-                return                              # exit function     
-            # transcribe content audio
-            content = funcs.transcribe_audio_file(content_path)
-            # now compare the command words against the map to see which command is the best match
-            command = command_q.get()               # waits for the command transcription thread to do its thing (if needed)
-            command_likelyness = []
-            command_words = command.split()
-            for keywords_tuple in voice_command_map.keys():
-                for word in command_words:
-                    if word in keywords_tuple:
-                        command = voice_command_map.get(keywords_tuple)
-                        command_likelyness.append(command)
-            if command_likelyness:                  # only do this if list is not empty
-                command = mode(command_likelyness)  # get the command which shows up most often in the list (best match)
-            else:
-                funcs.output_tts('ERROR! Command not found, function cancelled')
-                return
-            # confirm with the user that the command is correct
-            confirmation_message = f"executing: {command.__name__}, with the argument: {content}. Press once to confirm, and twice to start over"
-            funcs.output_do_visual_function('print_user_message', confirmation_message)
-            funcs.output_tts(confirmation_message)
-            u_input = funcs.command_input()         # blocks, waiting for button input
-            funcs.stop_program_sounds()             # stop tts audio if still playing
-            if u_input == 'A1':
-                pass                                # go on to the next step
-            elif u_input == 'A2':
-                break                               # break the loop and start over
-            elif u_input == 'reset':
-                return                              # cancel function 
-            # finally, execute the command and exit out of the function
-            if content:
-                command(content)
-            else:
-                command()
-            return
+    # while True:
+    #   while True:
+
+    # 1) collect audio
+    funcs.output_play_tone(1)               # play tone 1 to let user know that the voice command recording is starting
+    funcs.input_record_start()              # start recording command audio
+    ## generate neccessary paths for the audio files
+    folder = 'program_files'
+    audio_path = funcs.generate_file_path('voice_command.wav', folder)
+    ## collect command audio
+    u_input = funcs.command_input()
+    if u_input == 'A1' or u_input == 'A2':
+        funcs.input_record_stop_and_write(audio_path)
+    elif u_input == 'reset':
+        funcs.input_record_stop()
+        return                              # exit function      
+    ## transcribe audio
+    funcs.output_play_tone(2)               # lets user know the audio was recieved
+    funcs.output_do_visual_function('print_program_message', "processing audio...")
+    audio_text = funcs.transcribe_audio_file(audio_path)
+
+    # 2) split the audio text into comand and content according to one of the split words
+    try: # only do this if audio text is properly returned
+        audio_text_words = audio_text.split()
+    except:
+        return
+    split_word = "content"
+    ## only do this if the split word is present (not all commands require splitting for arguments)
+    if split_word in audio_text_words:
+        split_index = audio_text_words.index(split_word)
+        ## seperate text into command and content
+        command_words = audio_text_words[0:split_index]
+        content_words = audio_text_words[split_index+1:]
+        content = ' '.join(content_words)
+    else:
+        command_words = audio_text_words
+        content = ''
+    # 3) compare the command words against the map to see which command is the best match
+    command_likelyness = []
+    for keywords_tuple in voice_command_map.keys():
+        for word in command_words:
+            if word in keywords_tuple:
+                command = voice_command_map.get(keywords_tuple)
+                command_likelyness.append(command)
+    if command_likelyness:                  # only do this if list is not empty
+        command = mode(command_likelyness)  # get the command which shows up most often in the list (best match)
+    else:
+        funcs.output_tts('ERROR! Command not found, function cancelled')
+        return
+    # 4) confirm with the user that the command is correct
+    confirmation_message = f"executing: {command.__name__}, with the argument: {content}. Press once to confirm, and twice to start over"
+    funcs.output_do_visual_function('print_user_message', confirmation_message)
+    funcs.output_tts(confirmation_message)
+    u_input = funcs.command_input()         # blocks, waiting for button input
+    funcs.stop_program_sounds()             # stop tts audio if still playing
+    if u_input == 'A1':
+        pass                                # go on to the next step
+    elif u_input == 'A2':
+        return # break                      # break the loop and start over
+    elif u_input == 'reset':
+        return                              # cancel function 
+    # 5) finally, execute the command
+    if content:
+        command(content)
+    else:
+        command()
+    return
 
 #--------------------#
 # Main
@@ -117,9 +119,11 @@ def main_loop():
         'btnA*10':shutdown                              # exit program
     }
     while True:
-        funcs.output_do_visual_function('print_user_message', 'accepting input...')
+        print()
+        funcs.output_do_visual_function('print_program_message', 'accepting input')
         input = funcs.get_input()                   # get input events
         command = initial_commands_map.get(input)   # compare them against the map of initial commands
+        print()
         command()
 
 #--------------------#
@@ -127,27 +131,3 @@ def main_loop():
 if __name__ == "__main__":
     startup()
     main_loop()
-
-
-
-
-
-
-
-
-
-
-"""
-TODO:
-
-    you must have a large command map that outlines all of the commands
-        
-        ex: (all IO commands (ex: record, play, stop, output, etc.))
-
-        and all app modules must use specific keywords to let this script know what they need,
-        and it **all must be cleanly only coming from here!**
-
-    add chimes sounds to each commands
-
-"""
-

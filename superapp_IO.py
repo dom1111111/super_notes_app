@@ -180,7 +180,8 @@ class VisualOutput:
     def do_visual_output_requests(self):
         func_map = {
             'print_notes_table':self.print_notes_table,
-            'print_user_message':self.print_user_message
+            'print_user_message':self.print_user_message,
+            'print_program_message':self.print_program_message
         }
         while True:
             request = self.visual_output_q.get()
@@ -200,6 +201,9 @@ class VisualOutput:
     # for printing messages to the user
     def print_user_message(self, message):
         self.rich_console.print(message, style='dark_slate_gray1')
+
+    def print_program_message(self, message):
+        self.rich_console.print(message, style='green4')
 
     # for print
     def print_notes_table(self, table_data_list):
