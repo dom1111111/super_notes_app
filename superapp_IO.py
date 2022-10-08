@@ -1,3 +1,4 @@
+from turtle import color
 import play_rec_audio
 import pyttsx3
 from time import sleep
@@ -6,38 +7,62 @@ from queue import SimpleQueue
 import keyboard
 import os
 
+from rich.console import Console
+from rich.table import Table
+
 #--------------------#
 #--------Input-------#
 
-input_q = SimpleQueue()         # stores input events
-
-
 # Button Input - can detect multi-presses from buttons
-class PressCounter:
+class ButtonInput:
     def __init__(self):
         self.timer = 0
         self.timer_standard = 5     # this number * 0.05 second intervals - essentially the multi-click timeout
         self.press_count = 0
 
-        keyboard.add_hotkey('space', self.add_press) # ctrl+up+
+        # start the thread that will detect button input
+        self.continually_detect_button_presses()
 
+        # start the thread that will 
         count_down_thread = Thread(target=self.countdown)
         count_down_thread.daemon = True
         count_down_thread.start()
 
+    # detect button presses and call the `add_press` function
+    def continually_detect_button_presses(self):
+        keyboard.add_hotkey('space', self.add_press) # ctrl+up+
+
+    # if this function is called (meaning a button was pressed function), increase the press count and reset the timer
+    def add_press(self):
+        self.press_count += 1
+        self.timer = self.timer_standard
+
+    # if the countdown reaches 0 (meaning no button presses happened in the timeout period), send the number of presses to `button_action`
     def countdown(self):
         while True:
             while self.timer > 0:
                 sleep(0.05)
                 self.timer -= 1
             if self.press_count > 0 and self.timer == 0:
-                button_action(self.press_count) # send the number of presses to the button_action function
+                self.button_action(self.press_count) # send the number of presses to the button_action function
                 self.press_count = 0            # reset press count
             sleep(0.01)
 
-    def add_press(self):
-        self.press_count += 1
-        self.timer = self.timer_standard
+    # send button input - actions depends on number of presses within the timeout period
+    def button_action(self, press_num):
+        assert isinstance(press_num, int)
+        map = {
+            1:'btnA*1',
+            2:'btnA*2',
+            3:'btnA*3',
+            4:'btnA*4',
+            10:'btnA*10'
+        }
+        action = map.get(press_num)
+        if action:
+            input_q.put(action)     # put action in the action queue
+        else:
+            pass
 
 # Text Input
 """
@@ -48,27 +73,6 @@ def text_input():
     input_event_q.put(i)             # put press_num in the processor queue
 """
 
-# send button input
-def button_action(press_num):
-    assert isinstance(press_num, int)
-    map = {
-        1:'btnA*1',
-        2:'btnA*2',
-        3:'btnA*3',
-        4:'btnA*4',
-        10:'btnA*10'
-    }
-    action = map.get(press_num)
-    if action:
-        input_q.put(action)     # put action in the action queue
-    else:
-        pass
-        # put an error in the error log/panel??
-
-#--------------------#
-
-# the object to record audio
-rec = play_rec_audio.RecAudio()         # other processes can call function of this object
 
 
 #--------------------#
@@ -95,10 +99,6 @@ rec = play_rec_audio.RecAudio()         # other processes can call function of t
         # (maybe other stuff for tracking?)
 
 #--------------------#
-
-# NOTE: THIS NEEDS TO BE HANDLED
-visual_mode = False
-
 
 # class for any audio output - has functions for tts and playing recordings
 class AudioOutput:
@@ -166,12 +166,81 @@ class AudioOutput:
         self.general_sounds.stop()
 
 
+# class for visual output
+class VisualOutput:
+    def __init__(self):
+        self.visual_output_q = SimpleQueue()     # the queue for accepting output requests
+
+        self.rich_console = Console()
+
+        do_requests_thread = Thread(target=self.do_visual_output_requests)
+        do_requests_thread.daemon = True
+        do_requests_thread.start()
+
+    def do_visual_output_requests(self):
+        func_map = {
+            'print_notes_table':self.print_notes_table,
+            'print_user_message':self.print_user_message
+        }
+        while True:
+            request = self.visual_output_q.get()
+            try:
+                function_name = request[0]
+                function = func_map.get(function_name)
+                try:
+                    argument = request[1]
+                    function(argument)
+                except:
+                    function()
+            except:
+                print("output error")
+    
+    #---
+
+    # for printing messages to the user
+    def print_user_message(self, message):
+        self.rich_console.print(message, style='dark_slate_gray1')
+
+    # for print
+    def print_notes_table(self, table_data_list):
+        table = Table(title="a table", show_lines=True)
+        # add a column to number the rows
+        table.add_column('#', justify="center", no_wrap=True)
+        # take the first item of the list and use it to create columns
+        for column_name in table_data_list[0]:
+            if column_name == "Time":
+                table.add_column(column_name, justify="left", style="dark_orange3", overflow='fold', min_width=20)
+            elif column_name == "Title":
+                table.add_column(column_name, justify="left", style="cyan", overflow='fold', min_width=30)
+            elif column_name == "Descriptor":
+                table.add_column(column_name, justify="left", style="cyan", overflow='fold', min_width=30)
+            elif column_name == "File Path":
+                table.add_column(column_name, justify="left", style="wheat4", overflow='ellipsis', max_width=20)
+            else:
+                table.add_column(column_name, justify="left", style="purple4", overflow='ellipsis')
+        # then remove the first item (the one for the columns) and add the other elements as rows
+        table_data_list.pop(0)
+        row_number = 1
+        for row in table_data_list:
+            table.add_row(str(row_number), *row)         # the `*` works like it would passing arguments to a function - it unpacks the tuple (https://www.w3schools.com/python/python_tuples_unpack.asp)
+            row_number += 1
+        # finally, print the table
+        self.rich_console.print(table)
+        
+
+
 #--------------------#
 #-----MAIN_SCRIPT----#
+
+# NOTE: THIS NEEDS TO BE HANDLED
+visual_mode = False
 
 # this script should only be executed as a module
 if __name__ == "__main__":
     pass
 else:
-    pc = PressCounter()         # detects button presses
-    audio = AudioOutput()       # instatiate the AudioOutput class 
+    input_q = SimpleQueue()             # stores input events
+    binput = ButtonInput()              # detects button presses
+    rec = play_rec_audio.RecAudio()     # other processes can call function of this object
+    audio_out = AudioOutput()           # instatiate the AudioOutput class 
+    visual_out = VisualOutput()         # instatiate the VisualOutput class 

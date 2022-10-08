@@ -2,6 +2,8 @@
 description incomplete
 """
 import sqlite3
+from queue import SimpleQueue
+from threading import Thread
 import superapp_global_functions as funcs
 
 #--------------------------------#
@@ -35,22 +37,30 @@ cur.execute(create_notes_table)
 con.commit()
 
 #--------------------------------#
-# Supporting Functions & Setup
 
+# a class for storing session info
 class CurrentSession:
     def __init__(self):
         self.current_note = ''      # stores the id of the current page
         self.session_history = []   # stores the session's history of current pages
     def update_current_note(self, id):
         self.current_note = id
-    def update_session_history(self, id):
-        self.session_history.append(id)
+        # only append current note to history if it is different from the last
+        if id != self.current_note:
+            self.session_history.append(id)
     def reset_session(self):
         self.current_note = ''
         self.session_history.clear()
 
+# instantiate the current session
+session = CurrentSession()
+
+#--------------------------------#
+# Core Functions
+
 # main function for querying the databse
 def database_query(query, values=None):
+    # description:
     """
     takes 2 arguments:
     * the first argument must be sqlite script and is always required
@@ -65,15 +75,9 @@ def database_query(query, values=None):
 
     # also need code for error prevention
 
-#--------------------------------#
+#---
 
-# instantiate the current session
-this_session = CurrentSession()
-
-#--------------------------------#
-# Core Basic Functions
-
-def create_note(name):
+def create_note(name:str):
     time = funcs.get_current_datetime_string()
     q = """
     INSERT INTO Notes (time, title)
@@ -82,16 +86,26 @@ def create_note(name):
     q_values = (time, name)
     database_query(q, q_values)
     id = time
-    this_session.update_current_note(id)
+    session.update_current_note(id)
 
-def edit_current_note_descriptor(descriptor):
-    note = this_session.current_note
+def edit_current_note_descriptor(descriptor:str):
+    note = session.current_note
     q = """
     INSERT INTO Notes (descriptor)
     VALUES(?)
     WHERE WHERE time = ?;
     """
     q_values = (descriptor, note)
+    database_query(q, q_values)
+
+def edit_current_note_path(path:str):
+    note = session.current_note
+    q = """
+    INSERT INTO Notes (path)
+    VALUES(?)
+    WHERE time = ?;
+    """
+    q_values = (path, note)
     database_query(q, q_values)
 
 def get_specific_note(id):
@@ -101,15 +115,24 @@ def get_specific_note(id):
     """
     q_values = (id,)
     result = database_query(q, q_values)
-    this_session.update_current_note(id)
+    session.update_current_note(id)
     return result
 
-# return notes whose titles contain the value
-def get_notes_with_title_value(value):
+def get_last_50_notes():
+    q = """
+    SELECT time, title, descriptor, path FROM Notes
+    ORDER BY time DESC
+    LIMIT 50;
+    """
+    result = database_query(q)
+    display_result_table(result)
+
+# return list of notes whose titles contain the value
+def get_notes_with_title_value(value:str):
     value_words = value.lower().split()
     # create the sqlite query with a WHERE / OR statement for each word in the value:
     q = """
-    SELECT time, title, path, descriptor FROM Notes
+    SELECT time, title, descriptor, path FROM Notes
     """
     for i, word in enumerate(value_words):  # allows to keep track of the current iteration of the for loop
         if i == 0:                          # only run this code if it's the fist item in the list
@@ -130,9 +153,9 @@ def get_notes_with_title_value(value):
     for note in q_result:                   # main cycle for each note from the query result
         word_match_count = 0
         note_title = note[1].lower().split()
-        for note_word in note_title:  # cycle for each word in the title of each note
-            for word in value_words:        # cycle for each word in the search value words
-                if note_word == word:
+        for note_word in note_title:        # cycle for each word in the title of each note
+            for value_word in value_words:  # cycle for each word in the search value words
+                if note_word == value_word:
                     word_match_count += 1   # if the note_word matches the value_word, increase the match count
         # now calculate the percentage of matched words in each note of the rersults
         match_percentage = (word_match_count / len(note_title)) * 100
@@ -140,11 +163,45 @@ def get_notes_with_title_value(value):
         result_notes.append(note_match)
     # finally, sort the results from highest match percentage to lowest and return
     sorted_result_notes = sorted(result_notes, reverse=True)
-    return sorted_result_notes
+    final_result = [note[1] for note in sorted_result_notes]    # only return the notes, not the percentages
+    return final_result
 
+# return list of notes whose descriptors contain the value
+def get_notes_with_descriptor_value(value:str):
+    value_words = value.lower().split()
+    # create the sqlite query with a WHERE / OR statement for each word in the value:
+    q = """
+    SELECT time, title, descriptor, path FROM Notes
+    """
+    for i, word in enumerate(value_words):  # allows to keep track of the current iteration of the for loop
+        if i == 0:                          # only run this code if it's the fist item in the list
+            q += """WHERE descriptor LIKE ?"""
+        else:
+            q += """ OR descriptor LIKE ?"""
+    q += ";"
+    # set up the query placeholder values to be each word in the value:
+    q_values = []
+    for word in value_words:
+        q_values.append(f"%{word}%")
+    q_values = tuple(q_values)
+    # execute query:
+    q_result = database_query(q, q_values)
 
-
-
+    # now check to see which results match the search value best
+    result_notes = []
+    for note in q_result:                       # main cycle for each note from the query result
+        word_match_count = 0
+        note_descriptor = note[3].lower().split()
+        for value_word in value_words:          # cycle for each word in the search value words
+            for note_word in note_descriptor:   # cycle for each word in the title of each note
+                if value_word == note_word:
+                    word_match_count += 1       # if the note_word matches the value_word, increase the match count
+        note_match = (word_match_count, note)
+        result_notes.append(note_match)
+    # finally, sort the results from highest match count to lowest and return
+    sorted_result_notes = sorted(result_notes, reverse=True)
+    final_result = [note[1] for note in sorted_result_notes]    # only return the notes, not the match number
+    return final_result
 
 
 # TODO:
@@ -152,20 +209,108 @@ def get_notes_with_title_value(value):
         # matches the percentage for the result descriptor matching the search value (do the vice versa of above)
 
 
-# return notes whose descriptors contain the value
-def get_notes_with_descriptor_value(value):
-    q = """
-    SELECT time, title, path, descriptor FROM Notes
-    WHERE descriptor LIKE ?;
-    """
-    q_values = (f'%{value}%',)
-    result = database_query(q, q_values)
-    return result
 
 
 #--------------------------------#
 
-# these next functions are not core, but specific to viewing notes/generating views
+# Combo Functions
+    # these functions use the Core functions and superapp_global_functions to work
+
+
+# function to be used by output functions for creating tables
+## must ensure that queries to the db use this order or columns
+def display_result_table(result):
+    table_data = list(result)
+    column_names = ('Time', 'Title', 'Descriptor', 'File Path')
+    table_data.insert(0, column_names)
+    funcs.output_do_visual_function('print_notes_table', table_data)
+
+
+def create_full_voice_note():
+    funcs.output_play_tone(1)
+    # start recording title audio
+    funcs.input_record_start()
+
+    # create path for the note's associated audio files
+    time = funcs.get_current_datetime_string()
+    folder_path = funcs.generate_file_path('files', 'storage')
+    title_id = time + '_title.wav'
+    title_file_path = funcs.generate_file_path(title_id, folder_path)
+    descriptor_id = time + '_descriptor.wav'
+    descriptor_file_path = funcs.generate_file_path(descriptor_id, folder_path)
+
+    # end recording for title
+    u_input = funcs.command_input()
+    if u_input == 'A1' or u_input == 'A2':
+        funcs.input_record_stop_and_write(title_file_path)
+    elif u_input == 'reset':
+        funcs.input_record_stop()
+        return                              # exit function
+    
+    # start recording descriptor audio
+    funcs.input_record_start()
+    
+    # create thread to transcribe title audio in the mean time
+    title_q = SimpleQueue()
+    def title_transcribe():
+        title_text = funcs.transcribe_audio_file(title_file_path)
+        title_q.put(title_text)
+    command_transcribe_thread = Thread(target=title_transcribe)
+    command_transcribe_thread.daemon = True
+    command_transcribe_thread.start()
+    
+    # end recording for descriptor
+    u_input = funcs.command_input()
+    if u_input == 'A1' or u_input == 'A2':
+        funcs.input_record_stop_and_write(descriptor_file_path)
+    elif u_input == 'reset':
+        funcs.input_record_stop()
+        return                              # exit function 
+
+    # transcribe descriptor audio
+    descriptor = funcs.transcribe_audio_file(descriptor_file_path)
+    
+    # waits for the title transcription thread to do its thing (if needed)
+    title = title_q.get()                   
+
+    # confirm with the user that the input is correct
+    confirmation_message = f"""creating note with title: "{title}", and descriptor: "{descriptor}". Press once to confirm, and twice or more to cancel"""
+    funcs.output_do_visual_function('print_user_message', confirmation_message)
+    funcs.output_tts(confirmation_message)
+    u_input = funcs.command_input()         # blocks, waiting for button input
+    funcs.stop_program_sounds()             # stop tts audio if still playing
+    if u_input == 'A1': 
+        pass                                # go on to the next step
+    elif u_input == 'reset':
+        return                              # cancel function 
+    # finally, execute the query
+    path = title_file_path + ', ' + descriptor_file_path
+    q = """
+    INSERT INTO Notes (time, title, path, descriptor)
+    VALUES(?, ?, ?, ?);
+    """
+    q_values = (time, title, path, descriptor)
+    database_query(q, q_values)
+    id = time
+    session.update_current_note(id)
+
+
+def full_search(value:str):
+    title_matches = get_notes_with_title_value(value)
+    descriptor_matches = get_notes_with_descriptor_value(value)
+    all_matches = title_matches + descriptor_matches
+    # delete duplicates?
+    
+    display_result_table(all_matches)
+
+
+
+
+# TODO:
+# test new descriptor sorting function
+# test combo functions
+
+
 
 # NOTES:
 """
@@ -192,30 +337,17 @@ undo last command
     # etc.
 
 
-
-
-#--------------------------------#
-#########
-#########
 # testing
-
-print('hi!')
-
-# create_note("four men go to the bank bitch!")
-
 """
-val = ("%four%",)
-
-table = database_query("SELECT * FROM Notes WHERE title LIKE ?;", val)
+table = cur.execute("SELECT * FROM Notes;")
 
 for row in table:
     print(row)
 """
 
-
+"""
 while True:
-    i = input("search in notes: ")
-    table = get_notes_with_title_value(i)
-    for row in table:
-        print(row)
-
+    print()
+    ui = input('tpye: ')
+    full_search(ui)
+"""

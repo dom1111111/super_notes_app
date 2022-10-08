@@ -112,7 +112,6 @@ class RecAudio:
             self.stream.close()                 # closes the stream
             self.state = 'off'
             audio_data = b''.join(self.audio_frames)    # the b''.join is to join the bytes/chunks together in a single thing
-            # audio_data = self.audio_frames
             self.audio_frames.clear()           # reset the frames list to be empty for the next audio
             return audio_data
     
