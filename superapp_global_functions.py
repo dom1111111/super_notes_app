@@ -1,4 +1,3 @@
-from queue import SimpleQueue, Queue
 import speech_recognition as sr
 from datetime import datetime
 from time import sleep

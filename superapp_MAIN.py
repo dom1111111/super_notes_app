@@ -1,8 +1,7 @@
 import os
 from time import sleep
-from threading import Thread
+from datetime import datetime
 from statistics import mode
-from queue import SimpleQueue
 import superapp_global_functions as funcs
 # apps
 import app_notes_tasks
@@ -28,6 +27,27 @@ def shutdown():
     exit()
 
 #--------------------#
+# misc functions/commands
+
+def tell_current_time():
+    now = datetime.now()
+    time = now.strftime('%I:%M %p')
+    message = f"It is currently: {time}"
+    funcs.output_do_visual_function('print_user_message', message)
+    funcs.output_tts(message)
+
+def tell_current_date():
+    now = datetime.now()
+    weekday = now.strftime('%A')
+    date = now.strftime('%B %d')
+    if weekday == 'Wednesday':
+        message = f"It is {weekday} my dudes, {date}"
+    else:
+        message = f"It is {weekday}, {date}"
+    funcs.output_do_visual_function('print_user_message', message)
+    funcs.output_tts(message)
+
+#--------------------#
 # Voice commands
 
 voice_command_map = {
@@ -35,7 +55,9 @@ voice_command_map = {
     ('make','create','new','task'):lambda a : print('dummy command! +', a),
     ('find', 'search', 'get', 'retrieve', 'show', 'note', 'notes', 'page'):app_notes_tasks.full_search,
     ('get', 'show', 'return', 'display', 'read', 'last', 'recent', 'note', 'notes'):app_notes_tasks.get_last_50_notes,
-    ('exit', 'bye', 'goodbye', 'program', 'application'):shutdown
+    ('exit', 'bye', 'goodbye', 'program', 'application'):shutdown,
+    ('say', 'speak', 'tell', 'get', 'display', 'what', 'current', 'time'):tell_current_time,
+    ('say', 'speak', 'tell', 'get', 'display', 'what', 'current', 'date', 'today', 'todays', "today's"):tell_current_date
     }
 
 def voice_command():
