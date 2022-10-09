@@ -74,11 +74,10 @@ def text_input():
 """
 
 
-
 #--------------------#
 #-------Output-------#
 
-# class for any audio output - has functions for tts and playing recordings
+# class for audio output
 class AudioOutput:
     def __init__(self):
         # instantiate class for playing audio from the play_rec_audio module
@@ -90,37 +89,7 @@ class AudioOutput:
         self.tts = pyttsx3.init()                       # initialize the tts engine from the pyttsx3 module
         # program tones file path
         self.tones_path = './program_files'
-
-        # the queue for accepting audio output requests
-        self.audio_output_q = SimpleQueue()
-        # start thread to get and do output requests
-        do_requests_thread = Thread(target=self.do_audio_output_requests)
-        do_requests_thread.daemon = True
-        do_requests_thread.start()
-
-    def do_audio_output_requests(self):
-        func_map = {
-            'play_program_tone':self.play_program_tone,
-            'tts_speak':self.tts_speak,
-            'pause_program_sounds':self.pause_program_sounds,
-            'stop_program_sounds':self.stop_program_sounds,
-            'play_soundfile':self.play_soundfile,
-            'pause_soundfile':self.pause_soundfile,
-            'stop_soundfile':self.stop_soundfile
-        }
-        while True:
-            request = self.audio_output_q.get()
-            try:
-                function_name = request[0]
-                function = func_map.get(function_name)
-                try:
-                    argument = request[1]
-                    function(argument)
-                except:
-                    function()
-            except:
-                print("audio output error")
-    
+ 
     #---
     # all program_sounds functions:
 
@@ -186,34 +155,6 @@ class VisualOutput:
         # for rich visual output
         self.rich_console = Console()
 
-        # the queue for accepting visual output requests
-        self.visual_output_q = SimpleQueue()
-        # start thread to get and do output requests
-        do_requests_thread = Thread(target=self.do_visual_output_requests)
-        do_requests_thread.daemon = True
-        do_requests_thread.start()
-
-    def do_visual_output_requests(self):
-        func_map = {
-            'print_notes_table':self.print_notes_table,
-            'print_user_message':self.print_user_message,
-            'print_program_message':self.print_program_message
-        }
-        while True:
-            request = self.visual_output_q.get()
-            try:
-                function_name = request[0]
-                function = func_map.get(function_name)
-                try:
-                    argument = request[1]
-                    function(argument)
-                except:
-                    function()
-            except:
-                print("visual output error")
-    
-    #---
-
     # for printing messages to the user
     def print_user_message(self, message):
         self.rich_console.print(message, style='dark_slate_gray1')
@@ -246,14 +187,14 @@ class VisualOutput:
             row_number += 1
         # finally, print the table
         self.rich_console.print(table)
-        
 
 
 #--------------------#
 #-----MAIN_SCRIPT----#
 
-# NOTE: THIS NEEDS TO BE HANDLED
-visual_mode = False
+# if set to false, then don't do visual output
+visual_mode = True
+## this curently does nothing
 
 # this script should only be executed as a module
 if __name__ == "__main__":

@@ -2,17 +2,11 @@
 description incomplete
 """
 import sqlite3
-from queue import SimpleQueue
-from threading import Thread
-import superapp_global_functions as funcs
 
 #--------------------------------#
 # SQLite Database Setup
 
-database_folder_path = 'storage'
-database_filename = 'main.db'
-
-database_path = funcs.generate_file_path(database_filename, database_folder_path)
+database_path = 'storage\main.db'
 
 # connect to the databse (if it does not exist, it will create it)
 sqlite_connection = sqlite3.connect(database_path)
@@ -77,13 +71,12 @@ def database_query(query, values=None):
 
 #---
 
-def create_note(name:str):
-    time = funcs.get_current_datetime_string()
+def create_note(time:str, title:str, descriptor:str=''):
     q = """
-    INSERT INTO Notes (time, title)
-    VALUES(?, ?);
+    INSERT INTO Notes (time, title, descriptor)
+    VALUES(?, ?, ?);
     """
-    q_values = (time, name)
+    q_values = (time, title, descriptor)
     database_query(q, q_values)
     id = time
     session.update_current_note(id)
@@ -125,7 +118,7 @@ def get_last_50_notes():
     LIMIT 50;
     """
     result = database_query(q)
-    display_result_table(result)
+    return result
 
 # return list of notes whose titles contain the value
 def get_notes_with_title_value(value:str):
@@ -191,7 +184,7 @@ def get_notes_with_descriptor_value(value:str):
     result_notes = []
     for note in q_result:                       # main cycle for each note from the query result
         word_match_count = 0
-        note_descriptor = note[3].lower().split()
+        note_descriptor = note[2].lower().split()
         for value_word in value_words:          # cycle for each word in the search value words
             for note_word in note_descriptor:   # cycle for each word in the title of each note
                 if value_word == note_word:
@@ -204,111 +197,9 @@ def get_notes_with_descriptor_value(value:str):
     return final_result
 
 
-# TODO:
-    # the desciptor can be the same as above but reversed
-        # matches the percentage for the result descriptor matching the search value (do the vice versa of above)
 
 
 
-
-#--------------------------------#
-
-# Combo Functions
-    # these functions use the Core functions and superapp_global_functions to work
-
-
-# function to be used by output functions for creating tables
-## must ensure that queries to the db use this order or columns
-def display_result_table(result):
-    table_data = list(result)
-    column_names = ('Time', 'Title', 'Descriptor', 'File Path')
-    table_data.insert(0, column_names)
-    funcs.output_do_visual_function('print_notes_table', table_data)
-
-
-def create_full_voice_note():
-    funcs.output_play_tone(1)
-    # start recording title audio
-    funcs.input_record_start()
-
-    # create path for the note's associated audio files
-    time = funcs.get_current_datetime_string()
-    folder_path = funcs.generate_file_path('files', 'storage')
-    title_id = time + '_title.wav'
-    title_file_path = funcs.generate_file_path(title_id, folder_path)
-    descriptor_id = time + '_descriptor.wav'
-    descriptor_file_path = funcs.generate_file_path(descriptor_id, folder_path)
-
-    # end recording for title
-    u_input = funcs.command_input()
-    if u_input == 'A1' or u_input == 'A2':
-        funcs.input_record_stop_and_write(title_file_path)
-    elif u_input == 'reset':
-        funcs.input_record_stop()
-        return                              # exit function
-    
-    # start recording descriptor audio
-    funcs.input_record_start()
-    
-    # create thread to transcribe title audio in the mean time
-    title_q = SimpleQueue()
-    def title_transcribe():
-        title_text = funcs.transcribe_audio_file(title_file_path)
-        title_q.put(title_text)
-    command_transcribe_thread = Thread(target=title_transcribe)
-    command_transcribe_thread.daemon = True
-    command_transcribe_thread.start()
-    
-    # end recording for descriptor
-    u_input = funcs.command_input()
-    if u_input == 'A1' or u_input == 'A2':
-        funcs.input_record_stop_and_write(descriptor_file_path)
-    elif u_input == 'reset':
-        funcs.input_record_stop()
-        return                              # exit function 
-
-    # transcribe descriptor audio
-    descriptor = funcs.transcribe_audio_file(descriptor_file_path)
-    
-    # waits for the title transcription thread to do its thing (if needed)
-    title = title_q.get()                   
-
-    # confirm with the user that the input is correct
-    confirmation_message = f"""creating note with title: "{title}", and descriptor: "{descriptor}". Press once to confirm, and twice or more to cancel"""
-    funcs.output_do_visual_function('print_user_message', confirmation_message)
-    funcs.output_tts(confirmation_message)
-    u_input = funcs.command_input()         # blocks, waiting for button input
-    funcs.stop_program_sounds()             # stop tts audio if still playing
-    if u_input == 'A1': 
-        pass                                # go on to the next step
-    elif u_input == 'reset':
-        return                              # cancel function 
-    # finally, execute the query
-    path = title_file_path + ', ' + descriptor_file_path
-    q = """
-    INSERT INTO Notes (time, title, path, descriptor)
-    VALUES(?, ?, ?, ?);
-    """
-    q_values = (time, title, path, descriptor)
-    database_query(q, q_values)
-    id = time
-    session.update_current_note(id)
-
-
-def full_search(value:str):
-    title_matches = get_notes_with_title_value(value)
-    descriptor_matches = get_notes_with_descriptor_value(value)
-    all_matches = title_matches + descriptor_matches
-    # delete duplicates?
-    
-    display_result_table(all_matches)
-
-
-
-
-# TODO:
-# test new descriptor sorting function
-# test combo functions
 
 
 
@@ -335,19 +226,3 @@ undo last command
     # creating and sorting tasks
     # automatic task deligation
     # etc.
-
-
-# testing
-"""
-table = cur.execute("SELECT * FROM Notes;")
-
-for row in table:
-    print(row)
-"""
-
-"""
-while True:
-    print()
-    ui = input('tpye: ')
-    full_search(ui)
-"""
