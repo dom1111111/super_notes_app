@@ -78,45 +78,53 @@ def text_input():
 #--------------------#
 #-------Output-------#
 
-# NOTE: TEMP NOTES!!
-
-# OUTPUT - handles rich for display and audio for output
-
-    # queue to handle all output requests
-        # audio
-            # >>> audio must be managed to automatically stop audio when new requests are entered
-            # tts audio
-            # play custom audio / play pre-defined chimes
-            # specific thing for alarm - pauses current audio, and then loops an audio recording until alarm is stoped
-        # visual
-            # print to rich panel
-            # print to terminal
-
-# what needs to be passed to queue
-    # a tuple or ditionary with:
-        # function name
-        # function arguments
-        # (maybe other stuff for tracking?)
-
-#--------------------#
-
 # class for any audio output - has functions for tts and playing recordings
 class AudioOutput:
     def __init__(self):
         # instantiate class for playing audio from the play_rec_audio module
         self.program_sounds = play_rec_audio.PlayAudio()    # one instance for playing tts and program notifcation sounds
         self.general_sounds = play_rec_audio.PlayAudio()    # one instance for playing general audio
-
+        # text to speech - robot voice output
         self.tts_current_message = ''
         self.tts_audio_path = './program_files/current_tts.wav'
         self.tts = pyttsx3.init()                       # initialize the tts engine from the pyttsx3 module
-
+        # program tones file path
         self.tones_path = './program_files'
 
+        # the queue for accepting audio output requests
+        self.audio_output_q = SimpleQueue()
+        # start thread to get and do output requests
+        do_requests_thread = Thread(target=self.do_audio_output_requests)
+        do_requests_thread.daemon = True
+        do_requests_thread.start()
 
+    def do_audio_output_requests(self):
+        func_map = {
+            'play_program_tone':self.play_program_tone,
+            'tts_speak':self.tts_speak,
+            'pause_program_sounds':self.pause_program_sounds,
+            'stop_program_sounds':self.stop_program_sounds,
+            'play_soundfile':self.play_soundfile,
+            'pause_soundfile':self.pause_soundfile,
+            'stop_soundfile':self.stop_soundfile
+        }
+        while True:
+            request = self.audio_output_q.get()
+            try:
+                function_name = request[0]
+                function = func_map.get(function_name)
+                try:
+                    argument = request[1]
+                    function(argument)
+                except:
+                    function()
+            except:
+                print("audio output error")
+    
+    #---
     # all program_sounds functions:
 
-    def play_tone(self, tone_type):
+    def play_program_tone(self, tone_type):
         # check if general_sounds is playing
         if self.general_sounds.state == "playing":
             self.pause_soundfile()
@@ -130,7 +138,10 @@ class AudioOutput:
             self.program_sounds.play(path)
         except:
             # ERROR
-            pass 
+            pass
+        # if general_sounds is paused, then resume playback
+        if self.general_sounds.state == "paused":
+            self.pause_soundfile()
 
     def set_tts_speed(self, rate):
         self.tts.setProperty('rate', rate)          # defualt speaking rate is 200
@@ -145,14 +156,17 @@ class AudioOutput:
             self.tts.runAndWait()
         self.tts_current_message = message
         self.program_sounds.play(path)
-    
+        # if general_sounds is paused, then resume playback
+        if self.general_sounds.state == "paused":
+            self.pause_soundfile()
+
     def pause_program_sounds(self):
         self.program_sounds.pause_toggle()
 
     def stop_program_sounds(self):
         self.program_sounds.stop()
 
-
+    #---
     # all general_sounds functions:
 
     def play_soundfile(self, filepath):
@@ -169,10 +183,12 @@ class AudioOutput:
 # class for visual output
 class VisualOutput:
     def __init__(self):
-        self.visual_output_q = SimpleQueue()     # the queue for accepting output requests
-
+        # for rich visual output
         self.rich_console = Console()
 
+        # the queue for accepting visual output requests
+        self.visual_output_q = SimpleQueue()
+        # start thread to get and do output requests
         do_requests_thread = Thread(target=self.do_visual_output_requests)
         do_requests_thread.daemon = True
         do_requests_thread.start()
@@ -194,7 +210,7 @@ class VisualOutput:
                 except:
                     function()
             except:
-                print("output error")
+                print("visual output error")
     
     #---
 
@@ -205,7 +221,7 @@ class VisualOutput:
     def print_program_message(self, message):
         self.rich_console.print(message, style='green4')
 
-    # for print
+    # for printing tables from notes db queries
     def print_notes_table(self, table_data_list):
         table = Table(title="a table", show_lines=True)
         # add a column to number the rows
