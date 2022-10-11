@@ -164,11 +164,8 @@ class AppNotesTasks:
     def full_search(value:str):
         try:
             Output.program_message(f'(full_search) searching for "{value}"')
-            title_matches = app_nota.get_notes_with_title_value(value)
-            descriptor_matches = app_nota.get_notes_with_descriptor_value(value)
-            all_matches = title_matches + descriptor_matches
-            # delete duplicates?
-            AppNotesTasks.display_result_table(all_matches)
+            matches = app_nota.get_sorted_notes_with_value(value)
+            AppNotesTasks.display_result_table(matches)
         except:
             Output.program_message('ERROR - full search cancelled')
             Output.user_message('Error; something went wrong')

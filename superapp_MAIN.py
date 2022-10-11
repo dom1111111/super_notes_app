@@ -48,7 +48,7 @@ def tell_current_date():
 voice_command_map = {
     ('make','create','new','note','page'):funcs.AppNotesTasks.create_full_note,
     ('make','create','new','task'):lambda a : print('dummy command! +', a),
-    ('find', 'search', 'get', 'retrieve', 'show', 'note', 'notes', 'page'):funcs.AppNotesTasks.full_search,
+    ('find', 'search', 'get', 'return', 'retrieve', 'show', 'note', 'notes', 'page'):funcs.AppNotesTasks.full_search,
     ('get', 'show', 'return', 'display', 'read', 'last', 'recent', 'note', 'notes'):funcs.AppNotesTasks.get_recent_notes,
     ('exit', 'bye', 'goodbye', 'program', 'application'):shutdown,
     ('say', 'speak', 'tell', 'get', 'display', 'what', 'current', 'time', 'now'):tell_current_time,
@@ -76,7 +76,7 @@ def voice_command():
     funcs.Output.play_tone(2)               # lets user know the audio was recieved
     funcs.Output.program_message("processing audio...")
     audio_text = funcs.transcribe_audio_file(audio_path)
-
+    funcs.Output.program_message(f"understood audio as {audio_text}")
     # 2) split the audio text into comand and content according to one of the split words
     try: # only do this if audio text is properly returned
         audio_text_words = audio_text.split()
