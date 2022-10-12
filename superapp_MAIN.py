@@ -126,7 +126,7 @@ def main_loop():
     }
     while True:
         print()
-        funcs.Output.program_message("accepting input")
+        funcs.Output.user_message("Home Base")
         input = funcs.get_input()                   # get input events
         command = initial_commands_map.get(input)   # compare them against the map of initial commands
         print()

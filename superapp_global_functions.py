@@ -2,6 +2,7 @@ import speech_recognition as sr
 from datetime import datetime
 from time import sleep
 import os
+from rich.table import Table
 
 import superapp_IO as io
 import app_notes_tasks as app_nota
@@ -48,7 +49,8 @@ def transcribe_audio_file(file_path):
 # io input functions
 
 def get_input():
-    return io.input_q.get()
+    Output.program_message("waiting for input")
+    return io.input_q.get() # blocks, waiting for input to happen
 
 def command_input():
     while True:
@@ -132,7 +134,7 @@ class AppNotesTasks:
         else:
             Output.program_message('ERROR - cancelled create_full_note')
             Output.user_message('Error; unable to complete command')
-       
+
         # confirm with the user that the input is correct
         confirmation_message = f"""creating note with title: "{title}", and descriptor: "{descriptor}". Press once to confirm, and twice or more to cancel"""
         Output.user_message(confirmation_message)
@@ -150,22 +152,72 @@ class AppNotesTasks:
             Output.user_message('Error; something went wrong, note not created')
 
     # function to be used by notes output functions for creating tables
-    ## must ensure that queries to the db use this order or columns
-    def display_result_table(result):
-        table_data = list(result)
-        column_names = ('Time', 'Title', 'Descriptor', 'File Path')
-        table_data.insert(0, column_names)
-        io.visual_out.print_notes_table(table_data)
+    ## must ensure that queries to the db use correct order of columns
+    def output_result_table(result, table_title='a table'):
+        table = Table(title=table_title, show_lines=True)
+        # add a column to number the rows
+        table.add_column('#', justify="center", no_wrap=True)
+        # add columns for each note field
+        table.add_column("Time", justify="left", style="dark_orange3", overflow='fold', min_width=20)
+        table.add_column("Title", justify="left", style="cyan", overflow='fold', min_width=30)
+        table.add_column("Descriptor", justify="left", style="cyan", overflow='fold', min_width=30)
+        table.add_column("File Path", justify="left", style="wheat4", overflow='ellipsis', max_width=20)
+        
+        table_data = list(result)   # ensure result is a list
+        # for audio output:
+        ## get a list where each element is a string containing n notes (notes_per_page) at a time
+        ## in other words, each element is like a *page*, and each page has at most n notes
+        all_notes = ""
+        current_page = 1
+        notes_per_page = 10
+        page_break = "[PAGE]"
+        for n, note in enumerate(table_data):
+            # add each note as table rows
+            table.add_row(str(n+1), *note)         # the `*` works like it would passing arguments to a function - it unpacks the tuple (https://www.w3schools.com/python/python_tuples_unpack.asp)
+            # get string for all notes (to be turned into pages)
+            title = note[1]
+            if n < (current_page*notes_per_page):
+                all_notes += f"{n+1}: {title}. "
+            else:
+                all_notes += page_break
+                all_notes += f"{n+1}: {title}. "
+                current_page +=1
+        note_pages = all_notes.split(page_break)           
+        
+        # visual output - display the table
+        io.visual_out.print_rich_table(table)
+        # audio output - speak note titles
+        ## read one page at a time, only moving on to the next page when the user provides correct input. Otherwise exit the function
+        io.audio_out.tts_speak(f"Here is {table_title}")
+        while True:
+            for page in note_pages:
+                print('PAGE:', page)
+                io.audio_out.tts_speak(page)            # speak current page
+                u_input = command_input()               # blocks, waiting for button input
+                Output.stop_program_sounds()            # stop tts audio if still playing
+                if u_input == 'A1':
+                    pass                                # pass and read the next page 
+                elif u_input == 'A2' or u_input == 'reset':
+                    return                              # exit function 
+            # when all pages have been read, mention it to user, and then loop back
+            io.audio_out.tts_speak("End of search results. Press once to go through results again")
+            u_input = command_input()
+            Output.stop_program_sounds()
+            if u_input == 'A1':
+                pass                                    # pass and start over 
+            elif u_input == 'A2' or u_input == 'reset':
+                return                                  # exit function 
 
     def get_recent_notes():
         result = app_nota.get_last_50_notes()
-        AppNotesTasks.display_result_table(result)
+        AppNotesTasks.output_result_table(result, 'Recent Notes')
 
     def full_search(value:str):
         try:
             Output.program_message(f'(full_search) searching for "{value}"')
             matches = app_nota.get_sorted_notes_with_value(value)
-            AppNotesTasks.display_result_table(matches)
+            title = f"""Results for search: "{value}" """
+            AppNotesTasks.output_result_table(matches, title)
         except:
             Output.program_message('ERROR - full search cancelled')
             Output.user_message('Error; something went wrong')

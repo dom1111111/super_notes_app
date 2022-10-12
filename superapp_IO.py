@@ -8,7 +8,6 @@ import keyboard
 import os
 
 from rich.console import Console
-from rich.table import Table
 
 #--------------------#
 #--------Input-------#
@@ -162,31 +161,14 @@ class VisualOutput:
     def print_program_message(self, message):
         self.rich_console.print(message, style='green4')
 
-    # for printing tables from notes db queries
-    def print_notes_table(self, table_data_list):
-        table = Table(title="a table", show_lines=True)
-        # add a column to number the rows
-        table.add_column('#', justify="center", no_wrap=True)
-        # take the first item of the list and use it to create columns
-        for column_name in table_data_list[0]:
-            if column_name == "Time":
-                table.add_column(column_name, justify="left", style="dark_orange3", overflow='fold', min_width=20)
-            elif column_name == "Title":
-                table.add_column(column_name, justify="left", style="cyan", overflow='fold', min_width=30)
-            elif column_name == "Descriptor":
-                table.add_column(column_name, justify="left", style="cyan", overflow='fold', min_width=30)
-            elif column_name == "File Path":
-                table.add_column(column_name, justify="left", style="wheat4", overflow='ellipsis', max_width=20)
-            else:
-                table.add_column(column_name, justify="left", style="purple4", overflow='ellipsis')
-        # then remove the first item (the one for the columns) and add the other elements as rows
-        table_data_list.pop(0)
-        row_number = 1
-        for row in table_data_list:
-            table.add_row(str(row_number), *row)         # the `*` works like it would passing arguments to a function - it unpacks the tuple (https://www.w3schools.com/python/python_tuples_unpack.asp)
-            row_number += 1
-        # finally, print the table
-        self.rich_console.print(table)
+    # for printing rich tables
+    def print_rich_table(self, rich_table):
+        # only print table if it is indeed a rich.table object
+        if str(type(rich_table)) == "<class 'rich.table.Table'>":
+            self.rich_console.print(rich_table)
+        else:
+            self.print_program_message('ERROR - Incorrect object supplied for table making')
+
 
 
 #--------------------#
