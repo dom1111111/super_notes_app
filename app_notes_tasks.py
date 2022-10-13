@@ -111,13 +111,14 @@ def get_specific_note(id):
     session.update_current_note(id)
     return result
 
-def get_last_50_notes():
+def get_recent_n_notes(n):
     q = """
     SELECT time, title, descriptor, path FROM Notes
     ORDER BY time DESC
-    LIMIT 50;
+    LIMIT ?;
     """
-    result = database_query(q)
+    q_values = (n,)
+    result = database_query(q, q_values)
     return result
 
 # return list of notes whose column field contain the value

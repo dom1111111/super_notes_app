@@ -208,8 +208,8 @@ class AppNotesTasks:
             elif u_input == 'A2' or u_input == 'reset':
                 return                                  # exit function 
 
-    def get_recent_notes():
-        result = app_nota.get_last_50_notes()
+    def get_recent_notes(n=30):
+        result = app_nota.get_recent_n_notes(n)
         AppNotesTasks.output_result_table(result, 'Recent Notes')
 
     def full_search(value:str):
