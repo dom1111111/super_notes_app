@@ -82,17 +82,20 @@ def voice_command():
         audio_text_words = audio_text.split()
     except:
         return
-    split_word = "content"
-    ## only do this if the split word is present (not all commands require splitting for arguments)
-    if split_word in audio_text_words:
-        split_index = audio_text_words.index(split_word)
-        ## seperate text into command and content
-        command_words = audio_text_words[0:split_index]
-        content_words = audio_text_words[split_index+1:]
-        content = ' '.join(content_words)
-    else:
-        command_words = audio_text_words
-        content = ''
+    split_words = ("content", "Content")
+    ## only do this if a split word is present (not all commands require splitting for arguments)
+    # finds the first instance of a split word - any words coming after are ignored for splitting 
+    for word in audio_text_words:
+        if word in split_words:
+            split_index = audio_text_words.index(word)
+            ## seperate text into command and content
+            command_words = audio_text_words[0:split_index]
+            content_words = audio_text_words[split_index+1:]
+            content = ' '.join(content_words)
+            break
+        else:
+            command_words = audio_text_words
+            content = ''
     # 3) compare the command words against the map to see which command is the best match
     command_likelyness = []
     for keywords_tuple in voice_command_map.keys():

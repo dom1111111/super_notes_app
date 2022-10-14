@@ -182,16 +182,15 @@ class AppNotesTasks:
                 all_notes += page_break
                 all_notes += f"{n+1}: {title}. "
                 current_page +=1
-        note_pages = all_notes.split(page_break)           
-        
+        note_pages = all_notes.split(page_break)
         # visual output - display the table
         io.visual_out.print_rich_table(table)
         # audio output - speak note titles
         ## read one page at a time, only moving on to the next page when the user provides correct input. Otherwise exit the function
-        io.audio_out.do_request(io.audio_out.tts_speak, f"Here is {table_title}")
+        io.audio_out.tts_speak_and_wait(f"Here is {table_title}")
         while True:
             for page in note_pages:
-                io.audio_out.do_request(io.audio_out.tts_speak, page)   # speak current page
+                io.audio_out.tts_speak(page)            # speak current page
                 u_input = command_input()               # blocks, waiting for button input
                 Output.stop_program_sounds()            # stop tts audio if still playing
                 if u_input == 'A1':

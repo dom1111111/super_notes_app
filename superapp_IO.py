@@ -88,30 +88,11 @@ class AudioOutput:
         # program tones file path
         self.tones_path = './program_files'
 
-        # start output queue and thread to get and do requests from queue
-        self.queue = SimpleQueue()
-        self.start_call_funcs_thread()
+    def get_program_sounds_state(self):
+        return self.program_sounds.get_audio_state()
 
-    # function to put function call requests in queue
-    def do_request(self, *args):
-        """class.function name must always be first argument here. Arguments for class.function are optional"""
-        self.queue.put(args)
-
-    # the function to do audio output functions
-    def start_call_funcs_thread(self):
-        def call_funcs_from_queue():
-            while True:
-                request = self.queue.get()
-                func = request[0]
-                args = request[1:]
-                # this if statement ensures that certain program sounds don't overlap onto each other
-                if func == self.tts_speak or func == self.play_program_tone:
-                    while self.program_sounds.get_audio_state() == "active":
-                        sleep(0.1)
-                func(*args)
-        call_funcs_thread = Thread(target=call_funcs_from_queue)
-        call_funcs_thread.daemon = True
-        call_funcs_thread.start()
+    def get_general_sounds_state(self):
+        return self.general_sounds.get_audio_state()
 
     #---
     # all program_sounds functions:
@@ -156,6 +137,12 @@ class AudioOutput:
         if self.general_sounds.get_audio_state() == "stopped":
             self.pause_soundfile()
 
+    def tts_speak_and_wait(self, message):
+        self.tts_speak(message)
+        # this loop ensures that the tts audio output is completed before moving on
+        while self.get_program_sounds_state() == "active":
+            sleep(0.1)
+
     def pause_program_sounds(self):
         self.program_sounds.pause_toggle()
 
@@ -196,7 +183,6 @@ class VisualOutput:
             self.rich_console.print(rich_table)
         else:
             self.print_program_message('ERROR - Incorrect object supplied for table making')
-
 
 
 #--------------------#
