@@ -61,7 +61,7 @@ def command_input():
             return 'A2'
         elif b_input == 'btnA*3':
             Output.play_tone(2)
-            print('command cancelled')
+            Output.program_message('command cancelled')
             return 'reset'
         """
         elif b_input == 'btnA*4':
@@ -94,6 +94,7 @@ class Output:
     def user_message(message):
         io.visual_out.print_user_message(message)
         io.audio_out.tts_speak(message)
+        # io.audio_out.do_request(io.audio_out.tts_speak, message)
 
     def program_message(message):
         io.visual_out.print_program_message(message)
@@ -105,7 +106,6 @@ class Output:
 # notes_tasks_app functions
 
 class AppNotesTasks:
-
     def quick_memo():
         Output.user_message("this command is currently unavailable")
     #### - stuff for quick voice memo - each note to be reviewed and added to notes app later
@@ -188,11 +188,10 @@ class AppNotesTasks:
         io.visual_out.print_rich_table(table)
         # audio output - speak note titles
         ## read one page at a time, only moving on to the next page when the user provides correct input. Otherwise exit the function
-        io.audio_out.tts_speak(f"Here is {table_title}")
+        io.audio_out.do_request(io.audio_out.tts_speak, f"Here is {table_title}")
         while True:
             for page in note_pages:
-                print('PAGE:', page)
-                io.audio_out.tts_speak(page)            # speak current page
+                io.audio_out.do_request(io.audio_out.tts_speak, page)   # speak current page
                 u_input = command_input()               # blocks, waiting for button input
                 Output.stop_program_sounds()            # stop tts audio if still playing
                 if u_input == 'A1':

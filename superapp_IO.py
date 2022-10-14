@@ -1,13 +1,12 @@
-from turtle import color
-import play_rec_audio
 import pyttsx3
 from time import sleep
 from threading import Thread
 from queue import SimpleQueue
 import keyboard
 import os
-
 from rich.console import Console
+
+import play_rec_audio
 
 #--------------------#
 #--------Input-------#
@@ -22,7 +21,7 @@ class ButtonInput:
         # start the thread that will detect button input
         self.continually_detect_button_presses()
 
-        # start the thread that will 
+        # start the thread that will determine how many button presses happen at a time
         count_down_thread = Thread(target=self.countdown)
         count_down_thread.daemon = True
         count_down_thread.start()
@@ -88,13 +87,40 @@ class AudioOutput:
         self.tts = pyttsx3.init()                       # initialize the tts engine from the pyttsx3 module
         # program tones file path
         self.tones_path = './program_files'
- 
+
+        # start output queue and thread to get and do requests from queue
+        self.queue = SimpleQueue()
+        self.start_call_funcs_thread()
+
+    # function to put function call requests in queue
+    def do_request(self, *args):
+        """class.function name must always be first argument here. Arguments for class.function are optional"""
+        self.queue.put(args)
+
+    # the function to do audio output functions
+    def start_call_funcs_thread(self):
+        def call_funcs_from_queue():
+            while True:
+                request = self.queue.get()
+                func = request[0]
+                args = request[1:]
+                # this if statement ensures that certain program sounds don't overlap onto each other
+                if func == self.tts_speak or func == self.play_program_tone:
+                    while self.program_sounds.get_audio_state() == "active":
+                        sleep(0.1)
+                func(*args)
+        call_funcs_thread = Thread(target=call_funcs_from_queue)
+        call_funcs_thread.daemon = True
+        call_funcs_thread.start()
+
     #---
     # all program_sounds functions:
 
     def play_program_tone(self, tone_type):
+        # first stops audio (and closes stream) if it's playing
+        self.stop_program_sounds()
         # check if general_sounds is playing
-        if self.general_sounds.state == "playing":
+        if self.general_sounds.get_audio_state() == "active":
             self.pause_soundfile()
         # map of tone_type's file name
         map = {
@@ -108,24 +134,26 @@ class AudioOutput:
             # ERROR
             pass
         # if general_sounds is paused, then resume playback
-        if self.general_sounds.state == "paused":
+        if self.general_sounds.get_audio_state() == "stopped":
             self.pause_soundfile()
 
     def set_tts_speed(self, rate):
         self.tts.setProperty('rate', rate)          # defualt speaking rate is 200
 
     def tts_speak(self, message):
+        # first stops audio (and closes stream) if it's playing
+        self.stop_program_sounds()
         # check if general_sounds is playing
-        if self.general_sounds.state == "playing":
+        if self.general_sounds.get_audio_state() == "active":
             self.pause_soundfile()
-        path = self.tts_audio_path
+        # create tts audio file from message and then play it
         if message != self.tts_current_message:     # if the message is the same, skip this step
-            self.tts.save_to_file(message, path)
+            self.tts.save_to_file(message, self.tts_audio_path)
             self.tts.runAndWait()
         self.tts_current_message = message
-        self.program_sounds.play(path)
+        self.program_sounds.play(self.tts_audio_path)
         # if general_sounds is paused, then resume playback
-        if self.general_sounds.state == "paused":
+        if self.general_sounds.get_audio_state() == "stopped":
             self.pause_soundfile()
 
     def pause_program_sounds(self):
