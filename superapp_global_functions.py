@@ -188,6 +188,9 @@ class AppNotesTasks:
         # audio output - speak note titles
         ## read one page at a time, only moving on to the next page when the user provides correct input. Otherwise exit the function
         io.audio_out.tts_speak_and_wait(f"Here is {table_title}")
+        # add message to end of last page to let user know that there are no ore results
+        note_pages[-1] += "End of search results. Press once to go through results again, or twice to exit"
+        print(note_pages)
         while True:
             for page in note_pages:
                 io.audio_out.tts_speak(page)            # speak current page
@@ -196,15 +199,7 @@ class AppNotesTasks:
                 if u_input == 'A1':
                     pass                                # pass and read the next page 
                 elif u_input == 'A2' or u_input == 'reset':
-                    return                              # exit function 
-            # when all pages have been read, mention it to user, and then loop back
-            io.audio_out.tts_speak("End of search results. Press once to go through results again")
-            u_input = command_input()
-            Output.stop_program_sounds()
-            if u_input == 'A1':
-                pass                                    # pass and start over 
-            elif u_input == 'A2' or u_input == 'reset':
-                return                                  # exit function 
+                    return                              # exit function
 
     def get_recent_notes(n=30):
         result = app_nota.get_recent_n_notes(n)
