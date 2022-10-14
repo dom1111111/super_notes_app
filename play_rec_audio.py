@@ -18,14 +18,23 @@ class PlayAudio:
     """
     def __init__(self):
         self.p = pyaudio.PyAudio()     # instantiate PyAudio
-        # possible_states = 'off', 'playing', 'paused'
-        self.state = 'off'
+
+    def get_audio_state(self):
+        if hasattr(self, 'stream'):
+            if self.stream.is_active():
+                return 'active'
+            elif self.stream.is_stopped():
+                return 'stopped'
+            else:
+                return 'inactive'
+        else:
+            return "closed"
 
     # play audio based on audio file path provided
     def play(self, audio_file_path: str):
-        # if the current stream is active, stop it first, then play
-        if self.state == 'playing':
-            self.stop()
+        # if there is already an open stream, close it first
+        if hasattr(self, 'stream'):
+            self.stream.close()
 
         file = wave.open(audio_file_path, 'rb')
 
@@ -43,23 +52,19 @@ class PlayAudio:
             )
 
         self.stream.start_stream()
-        self.state = 'playing'
 
     # pause or resume audio stream
     def pause_toggle(self):
         if hasattr(self, 'stream'):             # first checks if 'stream' exists (it won't exist if nothing was played yet)
-            if self.state == 'playing':
+            if self.stream.is_active():
                 self.stream.stop_stream()       # pauses the stream
-                self.state = 'paused'
-            elif self.state == 'paused':
+            elif self.stream.is_stopped():
                 self.stream.start_stream()      # resumes the stream
-                self.state = 'playing'
 
     # close the audio stream
     def stop(self):
         if hasattr(self, 'stream'):
             self.stream.close()                 # closes the stream
-            self.state = 'off'
     
     def terminate(self):
         self.p.terminate()                      # closes the instance of pyaudio
@@ -75,43 +80,59 @@ class RecAudio:
     """
     def __init__(self):
         self.p = pyaudio.PyAudio()     # instantiate PyAudio
-        # possible_states = 'off', 'recording', 'paused'
-        self.state = 'off'
 
         self.CHUNK = 1024                # https://dsp.stackexchange.com/questions/13728/what-are-chunks-when-recording-a-voice-signal
         self.FORMAT = pyaudio.paInt16    # https://people.csail.mit.edu/hubert/pyaudio/docs/#pasampleformat
         self.CHANNELS = 1
         self.RATE = 44100
     
+    def get_audio_state(self):
+        if hasattr(self, 'stream'):
+            if self.stream.is_active():
+                return 'active'
+            elif self.stream.is_stopped():
+                return 'stopped'
+        else:
+            return "closed"
+
     # record audio from default recording device
     def record(self):
-        if not self.state == "recording":
-            CHUNK = self.CHUNK  
-            FORMAT = self.FORMAT
-            CHANNELS = self.CHANNELS
-            RATE = self.RATE
+        # close the stream if one is already open
+        if hasattr(self, 'stream'):
+            self.stream.close()
 
-            self.audio_frames = []
+        CHUNK = self.CHUNK  
+        FORMAT = self.FORMAT
+        CHANNELS = self.CHANNELS
+        RATE = self.RATE
 
-            def callback(in_data, frame_count, time_info, status):
-                self.audio_frames.append(in_data)
-                return (in_data, pyaudio.paContinue)
+        self.audio_frames = []
 
-            self.stream = self.p.open(
-                format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                frames_per_buffer=CHUNK,
-                stream_callback=callback
-                )
+        def callback(in_data, frame_count, time_info, status):
+            self.audio_frames.append(in_data)
+            return (in_data, pyaudio.paContinue)
+
+        self.stream = self.p.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            frames_per_buffer=CHUNK,
+            stream_callback=callback
+            )
+
+    def pause_toggle(self):
+        if hasattr(self, 'stream'):             # first checks if 'stream' exists (it won't exist if nothing was played yet)
+            if self.stream.is_active():
+                self.stream.stop_stream()       # pauses the stream
+            elif self.stream.is_stopped():
+                self.stream.start_stream()      # resumes the stream
 
     # close the audio stream and return audio data
     def stop_and_return(self):
         if hasattr(self, 'stream'):
             self.stream.close()                 # closes the stream
-            self.state = 'off'
-            audio_data = b''.join(self.audio_frames)    # the b''.join is to join the bytes/chunks together in a single thing
+            audio_data = b''.join(self.audio_frames)    # the b''.join is to join the bytes/chunks together into a single thing
             self.audio_frames.clear()           # reset the frames list to be empty for the next audio
             return audio_data
     
