@@ -52,6 +52,12 @@ def get_input():
     Output.program_message("waiting for input")
     return io.input_q.get() # blocks, waiting for input to happen
 
+def check_input():
+    try:
+        return io.input_q.get(block=False, timeout=0.01)
+    except:
+        return False
+
 def command_input():
     while True:
         b_input = get_input()
@@ -90,14 +96,25 @@ class AudioRec:
 class Output:
     def play_tone(tone_type):
         io.audio_out.play_program_tone(tone_type)
+        Output.wait_for_program_sounds()
 
     def user_message(message):
         io.visual_out.print_user_message(message)
         io.audio_out.tts_speak(message)
-        # io.audio_out.do_request(io.audio_out.tts_speak, message)
+        Output.wait_for_program_sounds()
+
+    def user_message_no_wait(message):
+        io.visual_out.print_user_message(message)
+        io.audio_out.tts_speak(message)
 
     def program_message(message):
         io.visual_out.print_program_message(message)
+
+    def wait_for_program_sounds():
+        # this loop ensures that any existing tts audio output is completed before moving on, but can be interupted by input
+        while io.audio_out.get_program_sounds_state() == "active":
+            if check_input():
+                break
 
     def stop_program_sounds():
         io.audio_out.stop_program_sounds()
@@ -137,16 +154,18 @@ class AppNotesTasks:
 
         # confirm with the user that the input is correct
         confirmation_message = f"""creating note with title: "{title}", and descriptor: "{descriptor}". Press once to confirm, and twice or more to cancel"""
-        Output.user_message(confirmation_message)
+        Output.user_message_no_wait(confirmation_message)
         u_input = command_input()               # blocks, waiting for button input
         Output.stop_program_sounds()            # stop tts audio if still playing
         if u_input == 'A1': 
             pass                                # go on to the next step
         elif u_input == 'A2' or u_input == 'reset':
+            Output.user_message('Cancelling')
             return                              # cancel function 
         # finally, execute the query
         try:
             app_nota.create_note(time, title, descriptor)
+            Output.user_message('Note created!')
         except:
             Output.program_message('ERROR - cancelled create_full_note')
             Output.user_message('Error; something went wrong, note not created')
@@ -187,10 +206,9 @@ class AppNotesTasks:
         io.visual_out.print_rich_table(table)
         # audio output - speak note titles
         ## read one page at a time, only moving on to the next page when the user provides correct input. Otherwise exit the function
-        io.audio_out.tts_speak_and_wait(f"Here is {table_title}")
+        Output.user_message(f"Here is {table_title}")
         # add message to end of last page to let user know that there are no ore results
         note_pages[-1] += "End of search results. Press once to go through results again, or twice to exit"
-        print(note_pages)
         while True:
             for page in note_pages:
                 io.audio_out.tts_speak(page)            # speak current page

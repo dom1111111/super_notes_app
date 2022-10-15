@@ -137,12 +137,6 @@ class AudioOutput:
         if self.general_sounds.get_audio_state() == "stopped":
             self.pause_soundfile()
 
-    def tts_speak_and_wait(self, message):
-        self.tts_speak(message)
-        # this loop ensures that the tts audio output is completed before moving on
-        while self.get_program_sounds_state() == "active":
-            sleep(0.1)
-
     def pause_program_sounds(self):
         self.program_sounds.pause_toggle()
 

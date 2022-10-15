@@ -20,7 +20,6 @@ def startup():
 def shutdown():
     message = "goodbye!"
     funcs.Output.user_message(message)
-    sleep(1)
     exit()
 
 #--------------------#
@@ -76,7 +75,7 @@ def voice_command():
     funcs.Output.play_tone(2)               # lets user know the audio was recieved
     funcs.Output.program_message("processing audio...")
     audio_text = funcs.transcribe_audio_file(audio_path)
-    funcs.Output.program_message(f"understood audio as {audio_text}")
+    funcs.Output.program_message(f"""understood audio as "{audio_text}" """)
     # 2) split the audio text into comand and content according to one of the split words
     try: # only do this if audio text is properly returned
         audio_text_words = audio_text.split()
@@ -129,7 +128,7 @@ def main_loop():
     }
     while True:
         print()
-        funcs.Output.user_message("Home Base")
+        funcs.Output.user_message_no_wait("Home Base")
         input = funcs.get_input()                   # get input events
         command = initial_commands_map.get(input)   # compare them against the map of initial commands
         print()
